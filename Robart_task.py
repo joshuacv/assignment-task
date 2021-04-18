@@ -194,25 +194,6 @@ class Patch:
 				result[keys[i]] = current_close
 		return result	
 	
-	def collect_pairs(self,dmin):
-		#This function calculates relative measures on all lines present in the root node. 
-		#The function then returns a dictionary of lines that are associated with each line ID
-		left = []
-		right = []
-		if self.left == None and self.right == None:
-			those_coming_close = {}
-			diag_coords = list(self.mybounds.boundary.coords)
-			diagonal = LineString([diag_coords[3],diag_coords[1]])
-			if dmin < diagonal.length:
-				those_coming_close = self.naively_check_relative_distances(dmin)
-			else:
-				for each in list(self.objects):
-					those_coming_close[each] = list(self.objects).remove(each)
-			return [those_coming_close]
-
-		left = self.left.collect_pairs(dmin)
-		right = self.right.collect_pairs(dmin)
-		return left + right
 
 	def isEmptylevel(self):
 		if self.left == None and self.right == None:
@@ -223,6 +204,54 @@ class Patch:
 				print(f"Empty patch at level {self.depth}")
 				return
 
+	def collect_pairs_correct(self,dmin):
+		#This function calculates relative measures on all lines present in the root node. 
+		#The function then returns a dictionary of lines that are associated with each line ID
+		diag_coords = list(self.mybounds.boundary.coords)
+		diagonal = LineString([diag_coords[3],diag_coords[1]])
+		left = []
+		right = []
+		those_coming_close = {}
+		if self.left == None and self.right == None:
+			if dmin < diagonal.length:
+				those_coming_close = self.naively_check_relative_distances(dmin)
+			else:
+				for each in list(self.objects):
+					temp_list = list(self.objects)
+					temp_list.remove(each)
+					those_coming_close[each] = temp_list
+			return [those_coming_close]
+		
+		left = self.left.collect_pairs_correct(dmin)
+		right = self.right.collect_pairs_correct(dmin)
+		center_objects = {}
+		if(self.islastcenter()):
+			[lp1,lp2] = list(self.right.mybounds.intersection(self.left.mybounds).coords)
+			xm = max(lp1[0],lp2[0])
+			ym = max(lp1[1],lp2[1])
+			x = min(lp1[0],lp2[0])
+			y = min(lp1[1],lp2[1])
+			if x == xm:
+				dist_box = box(x-dmin/2,y,xm+dmin/2,ym)
+			if y == ym:	
+				dist_box = box(x,y-dmin/2,xm,ym+dmin/2)
+			iteresting_objects = []
+			for int_obj in list(self.objects):
+				if self.objects[int_obj].intersects(dist_box):
+					iteresting_objects.append(int_obj)
+					
+			#print(iteresting_objects)
+			if len(iteresting_objects) > 1:
+				for each in iteresting_objects:
+					temp = iteresting_objects.copy()
+					temp.remove(each)
+					center_objects[each] = temp
+		return left + right + [center_objects]
+
+	def islastcenter(self):
+		if (self.left.right == None and self.left.left == None) or \
+			(self.right.right == None and self.right.left == None):
+			return True
 def import_matrix():
 #Utiliy function to import the matrix
 	mat = []
@@ -304,13 +333,14 @@ if __name__ == '__main__':
 	else:
 		print(f"No lines in this range")
 	#relative_measures = spatialTree.close_line_pairs(10)
-	relative_measures = spatialTree.collect_pairs(10)
+	relative_measures = spatialTree.collect_pairs_correct(10)
 	relative_measures_ordered = {}
 	for i in range(0,100):
 		current_collection = []
 		for each in relative_measures:
 			if i in each:
 				current_collection += each[i]
+		current_collection = list(dict.fromkeys(current_collection))
 		relative_measures_ordered[i] = current_collection
 	print(f"####################Task 3###################################\n")
 	print(f"Relative Measures")
